@@ -1,8 +1,9 @@
 # Headline Tracker
 
-Collects daily headlines from the **Guardian Content API** and **Telegraph RSS
-feeds** into a local SQLite database (`headlines.db`). Re-running is safe:
-duplicate URLs are ignored, so the database accumulates new headlines over time.
+Collects daily headlines from the **Guardian Content API**, **Telegraph RSS
+feeds**, and **BBC News RSS feeds** into a local SQLite database
+(`headlines.db`). Re-running is safe: duplicate URLs are ignored, so the
+database accumulates new headlines over time.
 
 ## Sources
 
@@ -20,13 +21,19 @@ duplicate URLs are ignored, so the database accumulates new headlines over time.
 - `telegraph.co.uk/business/rss.xml`
 - `telegraph.co.uk/money/rss.xml`
 
+**BBC News** (RSS):
+
+- `feeds.bbci.co.uk/news/uk/rss.xml`
+- `feeds.bbci.co.uk/news/politics/rss.xml`
+- `feeds.bbci.co.uk/news/business/rss.xml`
+
 ## Data stored
 
 Each headline is stored in the `headlines` table with:
 
 | Column         | Description                                        |
 | -------------- | -------------------------------------------------- |
-| `outlet`       | `Guardian` or `Telegraph`                          |
+| `outlet`       | `Guardian`, `Telegraph`, or `BBC News`             |
 | `section`      | Source section (e.g. `politics`, `business`)       |
 | `headline`     | The headline text                                  |
 | `url`          | Article URL (**unique** — used for de-duplication) |

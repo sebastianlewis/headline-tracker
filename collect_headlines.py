@@ -28,6 +28,12 @@ TELEGRAPH_FEEDS = {
     "money": "https://www.telegraph.co.uk/money/rss.xml",
 }
 
+BBC_FEEDS = {
+    "uk": "https://feeds.bbci.co.uk/news/uk/rss.xml",
+    "politics": "https://feeds.bbci.co.uk/news/politics/rss.xml",
+    "business": "https://feeds.bbci.co.uk/news/business/rss.xml",
+}
+
 
 def init_db(conn):
     """Create the headlines table if it does not already exist."""
@@ -98,20 +104,20 @@ def collect_guardian(api_key, collected_at):
     return rows
 
 
-def collect_telegraph(collected_at):
-    """Fetch headlines from the Telegraph RSS feeds."""
+def collect_rss(outlet, feeds, collected_at):
+    """Fetch headlines from a set of RSS feeds keyed by section."""
     rows = []
-    for section, url in TELEGRAPH_FEEDS.items():
+    for section, url in feeds.items():
         feed = feedparser.parse(url)
         if feed.bozo:
             print(
-                f"  ! Telegraph '{section}' feed parse warning: {feed.bozo_exception}",
+                f"  ! {outlet} '{section}' feed parse warning: {feed.bozo_exception}",
                 file=sys.stderr,
             )
         for entry in feed.entries:
             rows.append(
                 {
-                    "outlet": "Telegraph",
+                    "outlet": outlet,
                     "section": section,
                     "headline": entry.get("title", ""),
                     "url": entry.get("link", ""),
@@ -119,7 +125,7 @@ def collect_telegraph(collected_at):
                     "collected_at": collected_at,
                 }
             )
-        print(f"  Telegraph/{section}: {len(feed.entries)} fetched")
+        print(f"  {outlet}/{section}: {len(feed.entries)} fetched")
     return rows
 
 
@@ -143,9 +149,16 @@ def main():
         guardian_rows = [r for r in collect_guardian(api_key, collected_at) if r["url"]]
 
         print("Collecting Telegraph headlines...")
-        telegraph_rows = [r for r in collect_telegraph(collected_at) if r["url"]]
+        telegraph_rows = [
+            r for r in collect_rss("Telegraph", TELEGRAPH_FEEDS, collected_at) if r["url"]
+        ]
 
-        all_rows = guardian_rows + telegraph_rows
+        print("Collecting BBC News headlines...")
+        bbc_rows = [
+            r for r in collect_rss("BBC News", BBC_FEEDS, collected_at) if r["url"]
+        ]
+
+        all_rows = guardian_rows + telegraph_rows + bbc_rows
         inserted = store(conn, all_rows)
 
         total = conn.execute("SELECT COUNT(*) FROM headlines").fetchone()[0]
