@@ -1,0 +1,12 @@
+# Local SQLite database
+headlines.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Claude Code local settings
+.claude/settings.local.json
