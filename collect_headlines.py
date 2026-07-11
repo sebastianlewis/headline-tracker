@@ -34,6 +34,12 @@ BBC_FEEDS = {
     "business": "https://feeds.bbci.co.uk/news/business/rss.xml",
 }
 
+SKY_FEEDS = {
+    "home": "https://feeds.skynews.com/feeds/rss/home.xml",
+    "politics": "https://feeds.skynews.com/feeds/rss/politics.xml",
+    "business": "https://feeds.skynews.com/feeds/rss/business.xml",
+}
+
 
 def init_db(conn):
     """Create the headlines table if it does not already exist."""
@@ -158,7 +164,12 @@ def main():
             r for r in collect_rss("BBC News", BBC_FEEDS, collected_at) if r["url"]
         ]
 
-        all_rows = guardian_rows + telegraph_rows + bbc_rows
+        print("Collecting Sky News headlines...")
+        sky_rows = [
+            r for r in collect_rss("Sky News", SKY_FEEDS, collected_at) if r["url"]
+        ]
+
+        all_rows = guardian_rows + telegraph_rows + bbc_rows + sky_rows
         inserted = store(conn, all_rows)
 
         total = conn.execute("SELECT COUNT(*) FROM headlines").fetchone()[0]
