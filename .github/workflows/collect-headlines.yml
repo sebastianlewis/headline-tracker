@@ -44,11 +44,29 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # headlines.db is gitignored locally, so force-add it.
-          git add -f headlines.db
-          if git diff --staged --quiet; then
-            echo "No new headlines; nothing to commit."
-          else
+
+          # checkout pins to the triggering SHA, so a run queued behind another
+          # may hold a stale main and lose the push race. On rejection, sync to
+          # the latest origin/main and re-collect (INSERT OR IGNORE makes the
+          # re-run idempotent — it appends onto the newest committed DB), then
+          # retry the push. No force-push, so no committed rows are ever lost.
+          for attempt in 1 2 3; do
+            # headlines.db is gitignored locally, so force-add it.
+            git add -f headlines.db
+            if git diff --staged --quiet; then
+              echo "No new headlines; nothing to commit."
+              exit 0
+            fi
             git commit -m "Update headlines.db ($(date -u +'%Y-%m-%d %H:%M UTC'))"
-            git push
-          fi
+            if git push; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected on attempt $attempt; syncing to origin/main and re-collecting."
+            git fetch origin main
+            git reset --hard origin/main
+            python collect_headlines.py
+          done
+
+          echo "Failed to push after 3 attempts." >&2
+          exit 1
