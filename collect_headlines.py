@@ -19,30 +19,47 @@ import requests
 DB_PATH = "headlines.db"
 
 GUARDIAN_API_URL = "https://content.guardianapis.com/search"
-GUARDIAN_SECTIONS = ["uk-news", "politics", "business", "money"]
+# Maps each Guardian section to the content_type it should be tagged with.
+GUARDIAN_SECTIONS = {
+    "uk-news": "news",
+    "politics": "news",
+    "business": "news",
+    "money": "news",
+    "commentisfree": "opinion",
+}
 
+# RSS feeds are (url, content_type) keyed by section.
 TELEGRAPH_FEEDS = {
-    "news": "https://www.telegraph.co.uk/news/rss.xml",
-    "politics": "https://www.telegraph.co.uk/politics/rss.xml",
-    "business": "https://www.telegraph.co.uk/business/rss.xml",
-    "money": "https://www.telegraph.co.uk/money/rss.xml",
+    "news": ("https://www.telegraph.co.uk/news/rss.xml", "news"),
+    "politics": ("https://www.telegraph.co.uk/politics/rss.xml", "news"),
+    "business": ("https://www.telegraph.co.uk/business/rss.xml", "news"),
+    "money": ("https://www.telegraph.co.uk/money/rss.xml", "news"),
+    "opinion": ("https://www.telegraph.co.uk/opinion/rss.xml", "opinion"),
 }
 
 BBC_FEEDS = {
-    "uk": "https://feeds.bbci.co.uk/news/uk/rss.xml",
-    "politics": "https://feeds.bbci.co.uk/news/politics/rss.xml",
-    "business": "https://feeds.bbci.co.uk/news/business/rss.xml",
+    "uk": ("https://feeds.bbci.co.uk/news/uk/rss.xml", "news"),
+    "politics": ("https://feeds.bbci.co.uk/news/politics/rss.xml", "news"),
+    "business": ("https://feeds.bbci.co.uk/news/business/rss.xml", "news"),
+    # BBC does not publish op-eds (impartiality rules); InDepth is
+    # analysis/explainer content, so it is tagged distinctly.
+    "indepth": ("https://feeds.bbci.co.uk/news/bbcindepth/rss.xml", "analysis"),
 }
 
 SKY_FEEDS = {
-    "home": "https://feeds.skynews.com/feeds/rss/home.xml",
-    "politics": "https://feeds.skynews.com/feeds/rss/politics.xml",
-    "business": "https://feeds.skynews.com/feeds/rss/business.xml",
+    "home": ("https://feeds.skynews.com/feeds/rss/home.xml", "news"),
+    "politics": ("https://feeds.skynews.com/feeds/rss/politics.xml", "news"),
+    "business": ("https://feeds.skynews.com/feeds/rss/business.xml", "news"),
+    # Sky has no dedicated opinion feed, so none is added.
 }
 
 
 def init_db(conn):
-    """Create the headlines table if it does not already exist."""
+    """Create the headlines table if needed and migrate older schemas.
+
+    The content_type column is added to pre-existing databases via ALTER TABLE,
+    defaulting to 'news' so all existing rows remain valid.
+    """
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS headlines (
@@ -52,10 +69,19 @@ def init_db(conn):
             headline     TEXT NOT NULL,
             url          TEXT NOT NULL UNIQUE,
             published_at TEXT,
-            collected_at TEXT NOT NULL
+            collected_at TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT 'news'
         )
         """
     )
+
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(headlines)")}
+    if "content_type" not in columns:
+        conn.execute(
+            "ALTER TABLE headlines "
+            "ADD COLUMN content_type TEXT NOT NULL DEFAULT 'news'"
+        )
+
     conn.commit()
 
 
@@ -68,8 +94,10 @@ def store(conn, rows):
     conn.executemany(
         """
         INSERT OR IGNORE INTO headlines
-            (outlet, section, headline, url, published_at, collected_at)
-        VALUES (:outlet, :section, :headline, :url, :published_at, :collected_at)
+            (outlet, section, headline, url, published_at, collected_at,
+             content_type)
+        VALUES (:outlet, :section, :headline, :url, :published_at,
+                :collected_at, :content_type)
         """,
         rows,
     )
@@ -80,7 +108,7 @@ def store(conn, rows):
 def collect_guardian(api_key, collected_at):
     """Fetch headlines from the Guardian Content API for each section."""
     rows = []
-    for section in GUARDIAN_SECTIONS:
+    for section, content_type in GUARDIAN_SECTIONS.items():
         params = {
             "api-key": api_key,
             "section": section,
@@ -104,6 +132,7 @@ def collect_guardian(api_key, collected_at):
                     "url": item.get("webUrl", ""),
                     "published_at": item.get("webPublicationDate"),
                     "collected_at": collected_at,
+                    "content_type": content_type,
                 }
             )
         print(f"  Guardian/{section}: {len(results)} fetched")
@@ -113,7 +142,7 @@ def collect_guardian(api_key, collected_at):
 def collect_rss(outlet, feeds, collected_at):
     """Fetch headlines from a set of RSS feeds keyed by section."""
     rows = []
-    for section, url in feeds.items():
+    for section, (url, content_type) in feeds.items():
         feed = feedparser.parse(url)
         if feed.bozo:
             print(
@@ -129,6 +158,7 @@ def collect_rss(outlet, feeds, collected_at):
                     "url": entry.get("link", ""),
                     "published_at": entry.get("published"),
                     "collected_at": collected_at,
+                    "content_type": content_type,
                 }
             )
         print(f"  {outlet}/{section}: {len(feed.entries)} fetched")
