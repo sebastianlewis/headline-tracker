@@ -37,6 +37,27 @@ STOPWORDS = {
     "says", "say", "said", "new", "s",
 }
 
+# Format / branding artifacts, not editorial content: outlet self-references,
+# newsletter and live-feed furniture, recurring feature/podcast names, and
+# weekday labels. These dominate raw results but describe how an outlet
+# packages headlines rather than what it covers, so we drop them to keep the
+# comparison about content. Tune this set to taste.
+FORMAT_STOPWORDS = {
+    # outlet self-references
+    "guardian", "telegraph", "bbc", "sky", "news",
+    # newsletter / live-feed / format furniture
+    "briefing", "evening", "morning", "letters", "cartoons", "live",
+    "latest", "watch", "video", "podcast", "blog", "recap", "updates",
+    "update", "story", "stories", "review", "comment", "editorial",
+    # recurring feature / podcast branding (e.g. Telegraph's "Planet Normal")
+    "planet", "normal",
+    # weekday labels
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+    "sunday",
+}
+
+STOPWORDS |= FORMAT_STOPWORDS
+
 TOKEN_RE = re.compile(r"[a-z']+")
 
 
